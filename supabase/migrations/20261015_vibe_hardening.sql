@@ -148,9 +148,8 @@ begin
   select pseudo into v_pseudo from public.vibe_player_stats where user_id = uid;
 
   -- Fonction existante : le score est calculé côté serveur, pas par le client.
-  select to_jsonb(t) into r
-    from public.submit_public_quiz(p_slug := p_slug, p_participant_name := v_pseudo, p_answers := p_answers) t
-   limit 1;
+  -- submit_public_quiz renvoie directement du jsonb ({score, total_questions, ...}).
+  r := to_jsonb(public.submit_public_quiz(p_slug, v_pseudo, p_answers));
 
   v_score := case when (r->>'score') ~ '^\d+$' then (r->>'score')::integer
                   when (r->>'correct_answers') ~ '^\d+$' then (r->>'correct_answers')::integer end;

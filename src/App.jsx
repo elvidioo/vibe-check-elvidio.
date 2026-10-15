@@ -6,12 +6,13 @@ import {
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { api, QUIZ_SLUG } from './api';
-import { categories, demoQuiz, demoCorrect, demoLeaderboard, LEVEL_SIZE } from './data';
+import { categories, demoQuiz, demoCorrect, demoLeaderboard, LEVEL_SIZE, LEVELS, quizTarget } from './data';
 import Podium from './components/Podium';
 
 export default function App() {
   const [tab, setTab] = useState('Accueil');
   const [category, setCategory] = useState('Tous');
+  const [quizLevel, setQuizLevel] = useState('Niveau 1');
   const [search, setSearch] = useState('');
   const [quiz, setQuiz] = useState(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -126,11 +127,13 @@ export default function App() {
     }
   }
 
-  async function loadTestQuiz() {
+  function loadTestQuiz() { return loadQuiz(QUIZ_SLUG); }
+
+  async function loadQuiz(slug) {
     setLoading(true); setNotice('');
     try {
-      if (!supabase) throw new Error('Ajoute les identifiants Supabase dans le fichier .env.');
-      const quizData = await api.getQuiz(QUIZ_SLUG);
+      if (!supabase) throw new Error('Connexion au serveur impossible : cette version de l’application n’a pas reçu sa configuration Supabase (VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY).');
+      const quizData = await api.getQuiz(slug);
       setQuiz({ ...quizData, source: 'supabase' });
       setQuestionIndex(0); setAnswers({}); setResult(null); setTab('Quiz');
     } catch (e) {
@@ -217,8 +220,9 @@ export default function App() {
       <label className="searchbox"><Search size={18}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un univers…"/></label>
       <div className="quiz-library-section-head"><div><p className="eyebrow">EXPLORE LES MONDES</p><h2>Catégories</h2></div><span>{filtered.length} univers</span></div>
       <div className="chips"><button className={category==='Tous'?'selected':''} onClick={() => setCategory('Tous')}>Tous</button>{categories.map(c=><button key={c.name} className={category===c.name?'selected':''} onClick={() => setCategory(c.name)}>{c.name}</button>)}</div>
-      <div className="quiz-world-grid">{filtered.map((c,i)=>{const Icon=c.icon;return <button key={c.name} className={`quiz-world-card world-${c.tone}`} onClick={() => c.name==='Culture générale' ? loadTestQuiz() : setNotice('Ce thème sera disponible lorsque ses quiz auront été ajoutés dans Supabase.')}><div className="quiz-world-art"><span className="quiz-world-orbit orbit-a"/><span className="quiz-world-orbit orbit-b"/><span className="quiz-world-icon"><Icon size={27}/></span><small>0{i+1}</small></div><div className="quiz-world-info"><strong>{c.name}</strong><span>{c.count} questions <i>·</i> {c.difficulty}</span><b><ChevronRight size={15}/></b></div></button>})}</div>
-      <div className="quiz-library-footnote"><Gamepad2 size={16}/><span>Choisis une catégorie pour découvrir les défis disponibles.</span></div>
+      <div className="chips level-chips" role="group" aria-label="Niveau du quiz">{LEVELS.map(l=><button key={l} className={quizLevel===l?'selected':''} onClick={() => setQuizLevel(l)}>{l}</button>)}</div>
+      <div className="quiz-world-grid">{filtered.map((c,i)=>{const Icon=c.icon;return <button key={c.name} className={`quiz-world-card world-${c.tone}`} onClick={() => loadQuiz(quizTarget(c, quizLevel).slug)} disabled={loading}><div className="quiz-world-art"><span className="quiz-world-orbit orbit-a"/><span className="quiz-world-orbit orbit-b"/><span className="quiz-world-icon"><Icon size={27}/></span><small>0{i+1}</small></div><div className="quiz-world-info"><strong>{c.name}</strong><span>{quizTarget(c, quizLevel).count} questions <i>·</i> {c.difficulty}</span><b><ChevronRight size={15}/></b></div></button>})}</div>
+      <div className="quiz-library-footnote"><Gamepad2 size={16}/><span>Niveaux 1 à 3 : 10 questions. Marathon : quiz complet de 26 questions. Les univers sans niveau (Afrique, Histoire, Logique…) ont un quiz de 26 questions.</span></div>
     </main>}
 
     {tab === 'Quiz' && quiz && !result && activeQuestion && <main className="page quiz-page">
@@ -244,7 +248,7 @@ export default function App() {
       <div className="challenge-summary"><div><span className="challenge-summary-icon"><Coins size={18}/></span><strong>{playerXp} XP</strong><small>XP disponibles</small></div><div><span className="challenge-summary-icon pink"><CalendarDays size={18}/></span><strong>{3-completedChallenges.length>0?3-completedChallenges.length:0}</strong><small>missions restantes</small></div></div>
       <section className="challenge-section-head"><div><p className="eyebrow">À TOI DE JOUER</p><h2>Ta liste de missions</h2></div><span>RESET QUOTIDIEN</span></section>
       <div className="challenge-list">
-        {[{id:'quiz',icon:Brain,title:'Échauffement mental',desc:'Termine un quiz',reward:25,progress:completedChallenges.includes('quiz')?'1 / 1':'0 / 1',tone:'cyan'},{id:'perfect',icon:Trophy,title:'Sans faute',desc:'Réussis le quiz de test',reward:40,progress:completedChallenges.includes('perfect')?'1 / 1':'0 / 1',tone:'gold'},{id:'explore',icon:Gamepad2,title:'Explorateur',desc:'Visite l’écran des streams',reward:25,progress:completedChallenges.includes('explore')?'1 / 1':'0 / 1',tone:'pink'}].map(item=>{const Icon=item.icon,done=completedChallenges.includes(item.id);return <article className={`challenge-card ${done?'is-complete':''}`} key={item.id}><div className={`challenge-card-icon ${item.tone}`}><Icon size={22}/></div><div className="challenge-card-copy"><strong>{item.title}</strong><p>{item.desc}</p><div className="challenge-card-progress"><span>{item.progress}</span><span>+{item.reward} XP</span></div></div><button className="challenge-action" disabled={done} onClick={()=>{if(item.id==='quiz'){setTab('Quiz');setQuiz(null);setNotice('Termine un quiz pour accomplir cette mission.')}else if(item.id==='explore'){setTab('Streams');completeChallenge(item.id)}else{setTab('Quiz');setQuiz(null);setNotice('Réussis le quiz de test pour accomplir cette mission.')}}}>{done?<CircleCheck size={19}/>:<ChevronRight size={19}/>}</button></article>})}
+        {[{id:'quiz',icon:Brain,title:'Échauffement mental',desc:'Termine un quiz',reward:25,progress:completedChallenges.includes('quiz')?'1 / 1':'0 / 1',tone:'cyan'},{id:'perfect',icon:Trophy,title:'Sans faute',desc:'Termine un quiz sans faute',reward:40,progress:completedChallenges.includes('perfect')?'1 / 1':'0 / 1',tone:'gold'},{id:'explore',icon:Gamepad2,title:'Explorateur',desc:'Visite l’écran des streams',reward:25,progress:completedChallenges.includes('explore')?'1 / 1':'0 / 1',tone:'pink'}].map(item=>{const Icon=item.icon,done=completedChallenges.includes(item.id);return <article className={`challenge-card ${done?'is-complete':''}`} key={item.id}><div className={`challenge-card-icon ${item.tone}`}><Icon size={22}/></div><div className="challenge-card-copy"><strong>{item.title}</strong><p>{item.desc}</p><div className="challenge-card-progress"><span>{item.progress}</span><span>+{item.reward} XP</span></div></div><button className="challenge-action" disabled={done} onClick={()=>{if(item.id==='quiz'){setTab('Quiz');setQuiz(null);setNotice('Termine un quiz pour accomplir cette mission.')}else if(item.id==='explore'){setTab('Streams');completeChallenge(item.id)}else{setTab('Quiz');setQuiz(null);setNotice('Réussis un quiz sans faute pour accomplir cette mission.')}}}>{done?<CircleCheck size={19}/>:<ChevronRight size={19}/>}</button></article>})}
       </div>
       <section className="challenge-reward-banner"><div className="reward-gift"><Gift size={24}/></div><div><strong>Récompense de série</strong><p>3 missions terminées = bonus de 50 XP</p></div><span>{completedChallenges.length>=3?'DÉBLOQUÉ':'50 XP'}</span></section>
       <button className="challenge-shop-link" onClick={()=>setTab('Boutique')}><ShoppingBag size={18}/> Découvrir la boutique de récompenses <ChevronRight size={17}/></button>
